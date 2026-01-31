@@ -1,0 +1,10 @@
+Sentimen,Topik Ke,Kata Kunci (Bobot)
+negatif,1,"0.042*yang, 0.031*pendidikan, 0.029*efisiensi, 0.028*anggaran, 0.021*tidak, 0.018*ini, 0.017*di"
+negatif,2,"0.041*tidak, 0.035*pendidikan, 0.034*yang, 0.030*anggaran, 0.030*efisiensi, 0.023*dan, 0.017*dana"
+negatif,3,"0.046*pendidikan, 0.044*anggaran, 0.032*efisiensi, 0.024*dana, 0.023*ini, 0.019*tidak, 0.017*di"
+netral,1,"0.060*efisiensi, 0.051*tidak, 0.043*kip, 0.040*anggaran, 0.039*kuliah, 0.027*dan, 0.027*beasiswa"
+netral,2,"0.068*anggaran, 0.058*pendidikan, 0.055*efisiensi, 0.036*dan, 0.021*di, 0.018*ini, 0.017*pip"
+netral,3,"0.042*ya, 0.035*cair, 0.035*pip, 0.027*ke, 0.027*kapan, 0.022*yang, 0.016*presiden"
+positif,1,"0.068*pendidikan, 0.052*untuk, 0.051*anggaran, 0.035*ini, 0.034*yang, 0.033*indonesia, 0.032*efisiensi"
+positif,2,"0.062*tidak, 0.046*anggaran, 0.043*ini, 0.041*untuk, 0.039*efisiensi, 0.039*kuliah, 0.038*yang"
+positif,3,"0.038*pemerintah, 0.037*anggaran, 0.037*efisiensi, 0.037*ini, 0.037*kualitas, 0.034*pendidikan, 0.034*langkah"

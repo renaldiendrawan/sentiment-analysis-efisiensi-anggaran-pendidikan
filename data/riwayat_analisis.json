@@ -1,0 +1,23 @@
+[
+    {
+        "Waktu": "2026-01-31 16:07:05",
+        "Teks Asli": "Sangat kecewa dana BOS telat cair berbulan-bulan, gaji guru honorer jadi tertahan. Parah banget kinerjanya!",
+        "Teks Bersih": "sangat kecewa dana bos telat cair berbulanbulan gaji guru honorer jadi tertahan parah banget kinerjanya",
+        "Label": "Negatif",
+        "Keyakinan (%)": 57.3
+    },
+    {
+        "Waktu": "2026-01-31 16:07:32",
+        "Teks Asli": "Mendikbudristek hari ini resmi membahas kebijakan efisiensi anggaran pendidikan tahun 2025. Skema pencairan dana BOS dan tunjangan guru akan mengalami sedikit perubahan mekanisme.",
+        "Teks Bersih": "mendikbudristek hari ini resmi membahas kebijakan efisiensi anggaran pendidikan tahun skema pencairan dana bos dan tunjangan guru akan mengalami sedikit perubahan mekanisme",
+        "Label": "Netral",
+        "Keyakinan (%)": 66.16
+    },
+    {
+        "Waktu": "2026-01-31 16:09:13",
+        "Teks Asli": "Sangat setuju dengan langkah efisiensi anggaran BOS ini. Daripada bocor dikorupsi oknum sekolah, lebih baik diawasi ketat dan disalurkan tepat sasaran. Pendidikan Indonesia pasti lebih maju!",
+        "Teks Bersih": "sangat setuju dengan langkah efisiensi anggaran bos ini daripada bocor dikorupsi oknum sekolah lebih baik diawasi ketat dan disalurkan tepat sasaran pendidikan indonesia pasti lebih maju",
+        "Label": "Positif",
+        "Keyakinan (%)": 99.93
+    }
+]
