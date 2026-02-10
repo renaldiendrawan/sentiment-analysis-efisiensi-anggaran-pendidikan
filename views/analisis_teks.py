@@ -209,11 +209,10 @@ def render_analisis_teks(model, tokenizer):
                 
                 with st.chat_message("assistant", avatar="⚠️"):
                     st.write(f"**KONFIRMASI:** Apakah Anda yakin ingin menghapus **{msg}**?")
-                    st.caption("Tindakan ini tidak dapat dibatalkan.")
                     
                     col_yes, col_no = st.columns([1, 4])
                     with col_yes:
-                        if st.button("✅ YA, Hapus"):
+                        if st.button("✅ Ya, Hapus"):
                             if st.session_state['rows_to_delete'] == "ALL":
                                 st.session_state['history_analisis'] = []
                             else:
