@@ -8,16 +8,11 @@ import numpy as np
 
 from utils import predict_sentiment
 
-def cari_kolom_teks(daftar_kolom):
-    kata_kunci = ['komentar', 'teks', 'tweet', 'text', 'opini', 'caption', 'review', 'isi']
-    for i, col in enumerate(daftar_kolom):
-        if any(kata in col.lower() for kata in kata_kunci):
-            return i
-    return 0 
-
 def render_analisis_csv(model, tokenizer):
     st.title("📂 Analisis File CSV (Batch)")
-    st.markdown("Unggah file data (Excel/CSV) yang berisi ribuan komentar, dan biarkan AI menganalisis sentimennya secara massal.")
+    st.markdown("Unggah file data (CSV) yang berisi ribuan komentar, dan biarkan AI menganalisis sentimennya secara massal.")
+    
+    st.info("💡 **Panduan Upload:** Pastikan file CSV Anda memiliki kolom bernama **Teks Tweet** yang berisi teks/opini. Jika namanya berbeda, mohon ubah terlebih dahulu di Excel.")
 
     # 1. INISIALISASI SESSION STATE
     if 'batch_results' not in st.session_state:
@@ -28,46 +23,89 @@ def render_analisis_csv(model, tokenizer):
     # ==============================================================================
     # 2. AREA UPLOAD FILE
     # ==============================================================================
-    uploaded_file = st.file_uploader("Upload File CSV di sini:", type=['csv'])
+    uploaded_file = st.file_uploader("Upload File CSV di sini:")
     
     if uploaded_file is None:
         st.session_state['batch_results'] = None
         st.session_state['original_text_col'] = None
 
     if uploaded_file is not None:
-        df_upload = pd.read_csv(uploaded_file)
-        
-        st.markdown("---")
-        st.subheader("⚙️ Konfigurasi Analisis")
-        
-        col_cfg1, col_cfg2 = st.columns([2, 1])
-        with col_cfg1:
-            index_default = cari_kolom_teks(df_upload.columns)
-            text_col = st.selectbox("Pilih Kolom yang Berisi Teks Opini:", df_upload.columns, index=index_default)
-        with col_cfg2:
-            st.info(f"📊 Total Data: **{len(df_upload)} baris**")
+        # --- VALIDASI EKSTENSI (MEMENUHI TEST CASE 2) ---
+        if not uploaded_file.name.lower().endswith('.csv'):
+            st.error("❌ **Error:** Format file tidak didukung! Sistem hanya dapat memproses file berekstensi **.csv**.")
+            return # Menghentikan proses agar tidak lanjut ke bawah
+            
+        try:
+            df_upload = pd.read_csv(uploaded_file)
+            
+            # --- VALIDASI 1: Cek apakah file kosong ---
+            if df_upload.empty:
+                st.error("❌ File CSV yang Anda unggah kosong (0 baris). Silakan periksa kembali file Anda.")
+                return
 
-        if st.button("🚀 Mulai Proses Analisis", type="primary", use_container_width=True):
-            with st.spinner('🤖 AI sedang memproses... Mohon tunggu.'):
-                results_label, results_clean = [], []
-                my_bar = st.progress(0, text="Memproses data...")
-                total_data = len(df_upload)
-                
-                for i, row in df_upload.iterrows():
-                    teks = str(row[text_col])
-                    lbl, conf, _, cln = predict_sentiment(teks, model, tokenizer)
-                    results_label.append(lbl) 
-                    results_clean.append(cln)
+            # --- VALIDASI 2: VALIDASI KOLOM KETAT (STRICT) ---
+            KOLOM_WAJIB = "Teks Tweet"
+            
+            # Cek apakah kolom wajib ada (case-sensitive)
+            if KOLOM_WAJIB not in df_upload.columns:
+                st.error(f"❌ **Error Format:** File CSV Anda tidak memiliki kolom bernama **'{KOLOM_WAJIB}'**.")
+                st.warning(f"Perbaiki file Anda: Buka di Excel, ubah nama kolom yang berisi teks opini menjadi '{KOLOM_WAJIB}', simpan kembali sebagai CSV, lalu unggah ulang.")
+                return
+
+            st.markdown("---")
+            st.subheader("⚙️ Konfigurasi Analisis")
+            
+            text_col = KOLOM_WAJIB
+            st.success(f"✅ Kolom target **'{text_col}'** ditemukan! Total Data: **{len(df_upload)} baris**.")
+
+            if st.button("🚀 Mulai Proses Analisis", type="primary", use_container_width=True):
+                with st.spinner('🤖 AI sedang memproses... Mohon tunggu.'):
+                    # Membersihkan nilai NaN sebelum diproses
+                    df_upload[text_col] = df_upload[text_col].fillna("")
                     
-                    persen = (i + 1) / total_data
-                    my_bar.progress(persen, text=f"Selesai: {i+1} dari {total_data} data ({int(persen*100)}%)")
-                
-                df_upload['Teks_Bersih'] = results_clean
-                df_upload['Prediksi_Sentimen'] = results_label
-                
-                st.session_state['batch_results'] = df_upload
-                st.session_state['original_text_col'] = text_col 
-                st.success("✅ Analisis Berhasil Diselesaikan!")
+                    results_label, results_clean = [], []
+                    my_bar = st.progress(0, text="Memproses data...")
+                    total_data = len(df_upload)
+                    error_count = 0
+                    
+                    for i, row in df_upload.iterrows():
+                        teks = str(row[text_col])
+                        
+                        # Lewati jika teks kosong untuk mempercepat
+                        if not teks.strip():
+                            results_label.append("Netral")
+                            results_clean.append("")
+                        else:
+                            try:
+                                lbl, conf, _, cln = predict_sentiment(teks, model, tokenizer)
+                                results_label.append(lbl) 
+                                results_clean.append(cln)
+                            except Exception as e:
+                                results_label.append("Error")
+                                results_clean.append("GAGAL DIPROSES")
+                                error_count += 1
+                        
+                        persen = (i + 1) / total_data
+                        my_bar.progress(persen, text=f"Selesai: {i+1} dari {total_data} data ({int(persen*100)}%)")
+                    
+                    # Simpan hasil ke DataFrame
+                    df_upload['Teks_Bersih'] = results_clean
+                    df_upload['Prediksi_Sentimen'] = results_label
+                    
+                    st.session_state['batch_results'] = df_upload
+                    st.session_state['original_text_col'] = text_col 
+                    
+                    if error_count > 0:
+                        st.warning(f"⚠️ Analisis selesai, namun ada **{error_count} baris yang gagal diproses** (ditandai dengan label 'Error').")
+                    else:
+                        st.success("✅ Semua data berhasil dianalisis tanpa masalah!")
+
+        except pd.errors.EmptyDataError:
+            st.error("❌ **Error:** File CSV kosong atau format rusak.")
+        except pd.errors.ParserError:
+            st.error("❌ **Error Parsing:** Susunan koma (delimiter) pada file CSV berantakan. Harap simpan ulang file Excel ke format CSV.")
+        except Exception as e:
+            st.error(f"❌ **Kesalahan Sistem:** Terjadi masalah yang tidak terduga: `{e}`")
 
     # ==============================================================================
     # 3. AREA HASIL PREDIKSI
@@ -125,7 +163,6 @@ def render_analisis_csv(model, tokenizer):
         with tab3:
             st.subheader("☁️ WordCloud: Representasi Visual Teks")
             
-            # Dropdown 
             pilihan_wc = [
                 "1. Data Mentah", 
                 "2. Data Bersih (Preprocessed)", 
