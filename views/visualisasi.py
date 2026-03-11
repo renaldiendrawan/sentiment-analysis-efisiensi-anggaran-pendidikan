@@ -102,6 +102,7 @@ def render_visualisasi():
     st.subheader("☁️ WordCloud: Representasi Visual Teks")
     st.write("Kata-kata yang paling sering muncul dalam setiap kategori.")
 
+    # 1. Fungsi Asli untuk generate dari Teks (Data Mentah & Bersih)
     def generate_wc(text, colormap):
         if not isinstance(text, str) or not text.strip():
             st.warning("⚠️ Tidak ada data teks yang cukup.")
@@ -117,42 +118,62 @@ def render_visualisasi():
             except Exception as e:
                 st.error(f"Error WordCloud: {e}")
 
-    # Tabs Navigasi
+    # 2. FUNGSI BARU: Generate WordCloud langsung dari CSV Frekuensi agar instan
+    def generate_wc_from_freq(file_path, colormap):
+        if os.path.exists(file_path):
+            try:
+                df_freq = pd.read_csv(file_path)
+                # Mengubah format DataFrame menjadi Dictionary (Syarat mutlak WordCloud)
+                freq_dict = dict(zip(df_freq['Word'], df_freq['Frequency']))
+                
+                with st.spinner("Merender WordCloud instan dari CSV..."):
+                    wc = WordCloud(width=800, height=400, background_color='white', colormap=colormap, max_words=100)
+                    wc.generate_from_frequencies(freq_dict)
+                    
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    ax.imshow(wc, interpolation='bilinear')
+                    ax.axis("off")
+                    st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error memproses file CSV WordFreq: {e}")
+        else:
+            st.warning(f"⚠️ File frekuensi belum tersedia: {file_path}")
+
+    # Tabs Navigasi WordCloud
     tab_mentah, tab_bersih, tab_neg, tab_net, tab_pos = st.tabs([
         "Data Mentah", "Data Bersih", "Negatif", "Netral", "Positif"
     ])
 
     with tab_mentah:
         st.caption("Data dari kolom 'Teks Tweet' (Original)")
-        generate_wc(" ".join(df['Teks Tweet'].astype(str)), 'cividis')
+        generate_wc(" ".join(df['Teks Tweet'].dropna().astype(str)), 'cividis')
 
     with tab_bersih:
         st.caption("Data dari kolom 'Tweet_Final' (Preprocessed)")
         if 'Tweet_Final' in df.columns:
-            generate_wc(" ".join(df['Tweet_Final'].astype(str)), 'viridis')
-        else: st.warning("Kolom Tweet_Final tidak ada.")
+            generate_wc(" ".join(df['Tweet_Final'].dropna().astype(str)), 'viridis')
+        else: 
+            st.warning("Kolom Tweet_Final tidak ada.")
 
+    # MENGGUNAKAN FILE CSV WORDFREQ DI SINI
     with tab_neg:
-        st.caption("Kata dominan sentimen NEGATIF")
-        subset = df[df['Label_Clean'] == 'negatif']
-        if 'Tweet_Final' in df.columns: generate_wc(" ".join(subset['Tweet_Final'].astype(str)), 'Reds')
+        st.caption("Kata dominan sentimen NEGATIF (Sumber: WordFreq_Negatif.csv)")
+        generate_wc_from_freq('model/WordFreq_Negatif.csv', 'Reds')
 
     with tab_net:
-        st.caption("Kata dominan sentimen NETRAL")
-        subset = df[df['Label_Clean'] == 'netral']
-        if 'Tweet_Final' in df.columns: generate_wc(" ".join(subset['Tweet_Final'].astype(str)), 'Greys')
+        st.caption("Kata dominan sentimen NETRAL (Sumber: WordFreq_Netral.csv)")
+        generate_wc_from_freq('model/WordFreq_Netral.csv', 'Greys')
 
     with tab_pos:
-        st.caption("Kata dominan sentimen POSITIF")
-        subset = df[df['Label_Clean'] == 'positif']
-        if 'Tweet_Final' in df.columns: generate_wc(" ".join(subset['Tweet_Final'].astype(str)), 'Greens')
+        st.caption("Kata dominan sentimen POSITIF (Sumber: WordFreq_Positif.csv)")
+        generate_wc_from_freq('model/WordFreq_Positif.csv', 'Greens')
 
     st.markdown("---")
 
     # ==============================================================================
     # 4. TOPIC MODELING 
     # ==============================================================================
-    st.subheader("📌 5. Topic Modeling (LDA) & Kata Kunci")
+    st.subheader("📌 4. Topic Modeling (LDA) & Kata Kunci")
     st.write("Ekstraksi topik dominan dari hasil algoritma Latent Dirichlet Allocation (LDA).")
 
     path_lda = 'model/Hasil_Analisis_Topik_LDA.csv'
@@ -164,35 +185,39 @@ def render_visualisasi():
             
             def parse_lda_string(text_data):
                 data_items = []
-                for item in str(text_data).split(', '):
-                    try:
-                        weight, word = item.split('*')
-                        data_items.append({'Kata': word.strip(), 'Bobot': float(weight)})
-                    except: continue
-                return pd.DataFrame(data_items).sort_values(by='Bobot', ascending=True)
+                for word in str(text_data).split(','):
+                    word = word.strip()
+                    if word:
+                        data_items.append({'Kata': word})
+                
+                df_res = pd.DataFrame(data_items)
+                if not df_res.empty:
+                    df_res['Bobot'] = range(len(df_res), 0, -1)
+                    df_res = df_res.sort_values(by='Bobot', ascending=True)
+                return df_res
             
-            t_neg, t_net, t_pos = st.tabs(["Topik Negatif", "Topik Netral", "Topik Positif"])
+            t_neg, t_net, t_pos = st.tabs(["🔴 Topik Negatif", "⚪ Topik Netral", "🟢 Topik Positif"])
             mapping = {'negatif': t_neg, 'netral': t_net, 'positif': t_pos}
 
             for sentimen, tab in mapping.items():
                 with tab:
-                    df_subset = df_lda[df_lda['Sentimen'] == sentimen]
+                    df_subset = df_lda[df_lda['Sentimen'].str.lower() == sentimen]
                     
                     if df_subset.empty:
                         st.warning(f"Belum ada data topik untuk {sentimen}.")
                     else:
                         for idx, row in df_subset.iterrows():
                             topik_ke = row['Topik Ke']
-                            df_chart = parse_lda_string(row['Kata Kunci (Bobot)'])
+                            df_chart = parse_lda_string(row['Kata Kunci'])
                             
                             if not df_chart.empty:
                                 fig = px.bar(
                                     df_chart, x='Bobot', y='Kata', orientation='h',
-                                    title=f"<b>Topik {topik_ke}:</b> Kata Kunci Dominan",
+                                    title=f"<b>Topik {topik_ke}</b>",
                                     color='Bobot',
                                     color_continuous_scale='Reds' if sentimen == 'negatif' else 'Greys' if sentimen == 'netral' else 'Greens'
                                 )
-                                fig.update_layout(height=300, showlegend=False)
+                                fig.update_layout(height=300, showlegend=False, xaxis_title=None, xaxis_visible=False)
                                 st.plotly_chart(fig, use_container_width=True)
                                 st.divider()
         except Exception as e:
@@ -219,7 +244,6 @@ def render_visualisasi():
         rename_map = {'created_at': 'Tanggal', 'username': 'Username', 'Label_Clean': 'Label'}
         df_show = df_show.rename(columns=rename_map)
 
-        # Logika Filter
         if filter_label != 'Semua' and 'Label' in df_show.columns:
             df_show = df_show[df_show['Label'] == filter_label]
         
@@ -228,7 +252,6 @@ def render_visualisasi():
 
         df_show.index = range(1, len(df_show) + 1)
         
-        # --- PAGINATION SYSTEM ---
         baris_per_halaman = 20
         total_data = len(df_show)
         total_halaman = math.ceil(total_data / baris_per_halaman)
@@ -241,7 +264,6 @@ def render_visualisasi():
                 st.write("") 
                 st.caption(f"Menampilkan **{total_data}** Data (Halaman {halaman} dari {total_halaman})")
 
-            # Slicing Data sesuai halaman
             start_idx = (halaman - 1) * baris_per_halaman
             end_idx = start_idx + baris_per_halaman
             df_page = df_show.iloc[start_idx:end_idx]
@@ -252,7 +274,6 @@ def render_visualisasi():
 
     # --- TAB 2: TABEL EVALUASI & CONFUSION MATRIX ---
     with tab_eval:
-        # A. TABEL PERFORMA (Classification Report)
         st.subheader("1. Tabel Performa (Classification Report)")
         st.markdown("""
         Metrik evaluasi model berdasarkan data testing (20%):
@@ -278,7 +299,6 @@ def render_visualisasi():
 
         st.divider()
 
-        # B. CONFUSION MATRIX (HEATMAP)
         st.subheader("2. Confusion Matrix")
         st.markdown("Visualisasi ini menunjukkan **detail kesalahan prediksi**. Sumbu Y adalah Label Asli, Sumbu X adalah Prediksi Model.")
 

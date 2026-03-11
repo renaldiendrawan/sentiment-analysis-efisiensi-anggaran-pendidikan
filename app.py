@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load Model Bi-LSTM & FastText Tokenizer 
+# Load Model LSTM & Tokenizer 
 model, tokenizer = load_resources()
 
 # ==============================================================================

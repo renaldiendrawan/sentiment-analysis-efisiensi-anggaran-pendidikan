@@ -12,22 +12,19 @@ def render_beranda():
     # ==============================================================================
     # PENGAMBILAN DATA
     # ==============================================================================
-    # 1. Total Data Latih 
-    total_data_ros = 1563 
-
-    # 2. Akurasi Testing 
+    # 1. Akurasi Testing 
     try:
         df_perf = pd.read_csv('model/Tabel_Performa_LSTM.csv', index_col=0)
         akurasi_testing = round(df_perf.loc['accuracy', 'f1-score'] * 100, 2)
     except:
-        akurasi_testing = 87.33 
+        akurasi_testing = 0.0 
 
     # --- 1. RINGKASAN METRIK MODEL ---
     st.subheader("📊 Ringkasan Model Machine Learning")
     m1, m2, m3, m4 = st.columns(4)
     
-    m1.metric("Total Data Latih", f"{total_data_ros:,} Tweet", "Setelah Oversampling")
-    m2.metric("Akurasi Model", f"{akurasi_testing}%", "Data Testing") 
+    m1.metric("Arsitektur", "LSTM", "Deep Learning")
+    m2.metric("Akurasi Model", f"{akurasi_testing}%", "Data Testing P5") 
     m3.metric("Pembagian Data", "80 : 20", "Latih : Uji")
     m4.metric("Metode Ekstraksi", "LDA", "Topic Modeling")
 
@@ -41,16 +38,16 @@ def render_beranda():
         st.markdown("""
         **Tahapan Pemrosesan:**
         1. **Crawling Data:** Pengambilan data via Tweet Harvest (Feb-Mar 2025).
-        2. **Preprocessing:** Case folding, Cleaning, Tokenizing dan Normalisasi Slang. *(Stopword & Stemming ditiadakan untuk menjaga konteks FastText)*.
-        3. **Word Embedding:** FastText (Dimensi 300) untuk mengubah kata menjadi vektor.
-        4. **Deep Learning:** Model **Bi-Directional LSTM (Bi-LSTM)** untuk klasifikasi sentimen (Negatif, Netral, Positif).
+        2. **Preprocessing:** Case folding, Cleaning, Tokenizing dan Normalisasi Slang. *(Tanpa Stopword & Stemming agar urutan konteks kalimat tetap utuh)*.
+        3. **Word Embedding:** Standard Keras Embedding (Dimensi 128) dengan fitur *Masking*.
+        4. **Deep Learning:** Model **Long Short-Term Memory (LSTM)** biasa untuk klasifikasi sentimen (Negatif, Netral, Positif).
         5. **Topic Modeling:** Latent Dirichlet Allocation (LDA) untuk mengetahui topik dominan.
         """)
 
     with col_metode2:
-        st.info("**Mengapa Bi-LSTM + FastText?** \n\nFastText mampu menangani kata-kata slang/typo yang sering muncul di Twitter (Out-of-Vocabulary). Sedangkan Bi-LSTM mampu memahami konteks kalimat dari dua arah (kiri ke kanan dan sebaliknya), sangat cocok untuk bahasa Indonesia yang strukturnya dinamis.")
+        st.info("**Mengapa menggunakan LSTM?** \n\nPenggunaan algoritma LSTM yang dipadukan dengan *Keras Embedding* terbukti lebih ringan dari segi komputasi namun tetap optimal dalam menangkap pola konteks kalimat secara sekuensial (berurutan). Fitur *Masking* memastikan padding kalimat tidak merusak makna sentimen.")
         
-        st.success(f"**Hasil Pelatihan Model:** \nAkurasi Training mencapai **97.06%**, sedangkan Akurasi Testing stabil di **{akurasi_testing}%**. Ini menunjukkan model mampu memprediksi data baru dengan sangat baik tanpa mengalami *Overfitting* yang parah.")
+        st.success(f"**Hasil Pelatihan Model:** \nMelalui 5 tahapan percobaan (skenario 20% hingga 100% data latih), Akurasi Testing pada skenario P5 (100% data) mencapai **{akurasi_testing}%**. Ini menunjukkan model mampu memprediksi data baru dengan sangat baik.")
 
     st.markdown("---")
 

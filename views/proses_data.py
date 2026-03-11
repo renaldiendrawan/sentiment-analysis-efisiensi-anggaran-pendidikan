@@ -98,15 +98,16 @@ def render_proses_data():
         **Tujuan:** Mengubah data teks tidak terstruktur menjadi format bersih yang siap diproses mesin.
         
         Pada penelitian ini, kami memutuskan untuk **TIDAK MELAKUKAN Stemming & Stopword Removal**.
-        * **Alasan:** Model Deep Learning (seperti LSTM/FastText) membutuhkan konteks kalimat utuh untuk memahami nuansa sentimen (contoh: kata *"tidak"* sangat penting untuk membalikkan makna *"suka"* menjadi *"tidak suka"*).
+        * **Alasan:** Model Deep Learning (seperti LSTM) membutuhkan konteks kalimat utuh untuk memahami nuansa sentimen (contoh: kata *"tidak"* sangat penting untuk membalikkan makna *"suka"* menjadi *"tidak suka"*). Menghapus *stopword* justru dapat merusak tata bahasa yang akan dibaca oleh model secara sekuensial.
         """)
 
-        with st.expander("ℹ️ Rincian 4 Langkah Preprocessing", expanded=True):
+        with st.expander("ℹ️ Rincian 5 Langkah Preprocessing", expanded=True):
             st.markdown("""
             1.  **Case Folding:** Menyeragamkan huruf menjadi kecil (*lowercase*).
-            2.  **Cleaning:** Menghapus elemen non-teks (URL, Mention `@`, Hashtag `#`, Angka, Emoji).
+            2.  **Cleaning:** Menghapus elemen non-teks (URL, Mention `@`, Hashtag `#`, Angka, Tanda Baca).
             3.  **Tokenizing:** Memecah kalimat menjadi potongan kata per kata.
             4.  **Normalisasi Slang:** Mengubah kata tidak baku (*bgt, gk, sy*) menjadi baku (*banget, tidak, saya*) menggunakan kamus *lexicon*.
+            5.  **Detokenizing:** Menggabungkan kata kembali menjadi kalimat utuh.
             """)
 
         st.subheader("🔍 Komparasi Sebelum vs Sesudah")
@@ -136,7 +137,7 @@ def render_proses_data():
         """)
 
         st.subheader("A. Tokenization & Padding")
-        st.write("Setiap kata unik dalam dataset diberi ID angka. Karena panjang tweet berbeda-beda, kita lakukan **Padding** agar semua input memiliki panjang seragam (**100 kata**).")
+        st.write("Setiap kata unik dalam dataset diberi ID angka. Karena panjang tweet berbeda-beda, kita lakukan **Padding (Post)** agar semua input memiliki panjang seragam (**100 kata**). Angka 0 di akhir akan diabaikan oleh fitur *Masking* pada model.")
 
         if not df_mentah.empty and 'Label' in df_mentah.columns:
             df_token = df_mentah.dropna(subset=['Label']).copy()
@@ -150,29 +151,32 @@ def render_proses_data():
             st.dataframe(df_token[['Tweet_Final', 'Detail Token', 'Padding Sequence (100)']], use_container_width=True)
 
             st.markdown("---")
-            st.subheader("B. Splitting & ROS (Random Over Sampling)")
+            st.subheader("B. Splitting 80:20 & Skenario 5 Percobaan")
             
             st.markdown("""
-            **Masalah:** Data sentimen seringkali tidak seimbang (misal: Negatif 1000, Positif cuma 200).
-            **Solusi (ROS):** Kami menduplikasi data minoritas (Positif/Netral) secara acak hingga jumlahnya setara dengan kelas mayoritas (Negatif).
+            **Skenario Pelatihan:**
+            Model dilatih menggunakan **5 Skenario Percobaan** (P1 hingga P5) dengan porsi data latih masing-masing 20%, 40%, 60%, 80%, dan 100% (dari total 80% split data latih).
+            
+            **Penanganan Imbalance (ROS):**
+            Kami menduplikasi data minoritas (Positif/Netral) secara acak (*Random Over Sampling*) di **setiap porsi data latih** hingga jumlahnya setara dengan kelas mayoritas (Negatif). Data Testing (20%) dibiarkan murni agar evaluasi tetap objektif.
             """)
 
             df_train, df_test = train_test_split(df_token, test_size=0.2, random_state=42, stratify=df_token['Label'])
             kelas_mayoritas = df_train['Label'].value_counts().max()
             
             col_metric1, col_metric2, col_metric3 = st.columns(3)
-            col_metric1.metric("Data Latih (80%)", f"{len(df_train):,} Sample", "Untuk melatih model")
-            col_metric2.metric("Data Uji (20%)", f"{len(df_test):,} Sample", "Untuk validasi akhir")
-            col_metric3.metric("Target ROS", f"{kelas_mayoritas}", "Per Kelas Sentimen")
+            col_metric1.metric("Maksimal Data Latih (80%)", f"{len(df_train):,} Sample", "Skenario P5")
+            col_metric2.metric("Data Uji Tetap (20%)", f"{len(df_test):,} Sample", "Validasi Objektif")
+            col_metric3.metric("Target ROS P5", f"{kelas_mayoritas}", "Per Kelas Sentimen")
             
-            st.success(f"✅ **Status Data:** Dataset latih telah diseimbangkan (Balanced) agar model adil dalam memprediksi.")
+            st.success(f"✅ **Status Data:** Dataset latih telah diseimbangkan (Balanced) menggunakan teknik ROS pada tahapan pemodelan.")
 
     # --- 4. ARSITEKTUR MODEL ---
     elif pilihan == "4. Arsitektur Model":
-        st.header("🧠 4. Arsitektur Model: Hybrid FastText + Bi-LSTM")
+        st.header("🧠 4. Arsitektur Model: LSTM Standar")
         
         st.markdown("""
-        Kami menggunakan arsitektur **Hybrid** yang menggabungkan keunggulan representasi kata FastText dengan kemampuan memori jangka panjang Bi-LSTM.
+        Kami menggunakan arsitektur **Long Short-Term Memory (LSTM)** yang dipadukan dengan *Keras Embedding Layer* dan fitur *Masking*.
         """)
 
         c_text, c_spacer, c_img = st.columns([1.5, 0.2, 1])
@@ -180,16 +184,17 @@ def render_proses_data():
         with c_text:
             st.subheader("Rincian Layer & Fungsinya:")
             st.markdown("""
-            1.  **Embedding (FastText):** Mengubah indeks kata menjadi vektor padat (300 dimensi). FastText unggul menangani kata *out-of-vocabulary* (typo/slang).
-            2.  **SpatialDropout1D (0.3):** Mematikan sebagian neuron secara acak untuk mencegah model "menghafal" data (*overfitting*).
-            3.  **Bi-LSTM (64 Units):** Memproses urutan kata dari dua arah (Depan-ke-Belakang DAN Belakang-ke-Depan) untuk menangkap konteks kalimat secara utuh.
-            4.  **Dense Layer (Softmax):** Layer output dengan 3 neuron yang menghasilkan probabilitas untuk kelas **Negatif, Netral, dan Positif**.
+            1.  **Embedding (Keras):** Mengubah indeks kata menjadi vektor padat (128 dimensi). Fitur `mask_zero=True` diaktifkan agar model murni fokus pada teks tanpa terdistraksi oleh angka padding (0) di akhir kalimat.
+            2.  **SpatialDropout1D (0.2):** Mematikan sebagian 1D feature maps secara acak untuk mencegah model "menghafal" data secara berlebihan (*overfitting*).
+            3.  **LSTM (64 Units):** Memproses urutan kata secara sekuensial (dari awal hingga akhir kalimat) agar model bisa memahami relasi dan pola frasa sentimen dengan sangat baik.
+            4.  **Dense Layer (32 Units):** Ekstraksi fitur tingkat tinggi menggunakan fungsi aktivasi ReLU dengan peluruhan (Dropout 0.2).
+            5.  **Dense Output (3 Units):** Layer akhir dengan aktivasi *Softmax* yang menghasilkan nilai probabilitas klasifikasi untuk **Negatif, Netral, dan Positif**.
             """)
             
             param_data = {
-                "Nama Layer": ["Embedding", "SpatialDropout", "Bi-LSTM", "Dropout & L2", "Dense Output"],
-                "Output Shape": ["(None, 60, 300)", "(None, 60, 300)", "(None, 128)", "(None, 128)", "(None, 3)"],
-                "Jml Parameter": ["Trainable", "0", "186,880", "0", "387"]
+                "Nama Layer": ["Embedding", "SpatialDropout", "LSTM", "Dense", "Dense Output"],
+                "Output Shape": ["(None, 100, 128)", "(None, 100, 128)", "(None, 64)", "(None, 32)", "(None, 3)"],
+                "Jml Parameter": ["1,280,000", "0", "49,408", "2,080", "99"]
             }
             st.dataframe(pd.DataFrame(param_data), use_container_width=True)
 
@@ -203,9 +208,9 @@ def render_proses_data():
                 graph.attr(rankdir='TB') 
                 
                 graph.node('I', 'Input Teks\n(Integer Encoded)', fillcolor='#FFEBEE')
-                graph.node('E', 'Embedding Layer\n(FastText Weights)', fillcolor='#FFF3E0') 
-                graph.node('L', 'Bi-LSTM Layer\n(Proses 2 Arah)', fillcolor='#E3F2FD') 
-                graph.node('D', 'Dense & Softmax\n(Klasifikasi)', fillcolor='#E8F5E9')
+                graph.node('E', 'Embedding Layer\n(Dimensi 128, Masking)', fillcolor='#FFF3E0') 
+                graph.node('L', 'LSTM Layer\n(Proses Sekuensial)', fillcolor='#E3F2FD') 
+                graph.node('D', 'Dense & Softmax\n(Klasifikasi 3 Kelas)', fillcolor='#E8F5E9')
                 
                 graph.edge('I', 'E')
                 graph.edge('E', 'L')
@@ -219,18 +224,18 @@ def render_proses_data():
     # 5. EVALUASI MODEL 
     # ==============================================================================
     elif pilihan == "5. Evaluasi Model":
-        st.header("5. Evaluasi Performa Model")
-        st.markdown("Pengujian dilakukan menggunakan data yang **belum pernah dilihat** oleh model sebelumnya (Data Testing 20%).")
+        st.header("5. Evaluasi Performa Model (Skenario P1-P5)")
+        st.markdown("Evaluasi ini mencakup perbandingan 5 skenario pelatihan berdasarkan ukuran rasio data latih (20% hingga 100%), yang diuji menggunakan **Data Testing murni (20%)**.")
         
-        tab_a, tab_b = st.tabs(["📊 Metrik Kuantitatif (Tabel)", "📉 Grafik Visualisasi (Interaktif)"])
+        tab_a, tab_b, tab_c = st.tabs(["📊 Metrik (Model P5)", "📈 Perbandingan 5 Skenario", "📉 Detail Learning Curve"])
         
         # --- TAB A: TABEL ANGKA ---
         with tab_a:
-            st.subheader("1. Classification Report")
+            st.subheader("1. Classification Report (Model P5)")
             st.markdown("""
-            - **Precision:** Ketepatan prediksi (Minim *False Positive*).
-            - **Recall:** Kelengkapan prediksi (Minim *False Negative*).
-            - **F1-Score:** Rata-rata harmonis (Metrik utama untuk data tidak seimbang).
+            - **Precision:** Ketepatan prediksi model (Meminimalisir salah tebak positif palsu).
+            - **Recall:** Kelengkapan prediksi (Meminimalisir salah tebak negatif palsu).
+            - **F1-Score:** Rata-rata harmonis antara Precision dan Recall.
             """)
             
             path_perf = 'model/Tabel_Performa_LSTM.csv'
@@ -238,78 +243,92 @@ def render_proses_data():
 
             if os.path.exists(path_perf):
                 df_perf = pd.read_csv(path_perf, index_col=0)
-                
                 st.dataframe(
                     df_perf.style.highlight_max(axis=0, props='background-color: #FFEB3B; color: black; font-weight: bold'),
                     use_container_width=True
                 )
-                
-                # Metric Cards
                 if 'accuracy' in df_perf.index:
                     acc = df_perf.loc['accuracy', 'f1-score']
-                    st.metric("Akurasi Total (Data Testing)", f"{acc*100:.2f}%")
+                    st.metric("Akurasi Total (Data Testing P5)", f"{acc*100:.2f}%")
             else:
                 st.warning("⚠️ File 'Tabel_Performa_LSTM.csv' belum tersedia.")
-
-        # --- TAB B: GRAFIK ---
-        with tab_b:
             
-            # 1. KURVA PEMBELAJARAN (Line Chart)
-            st.subheader("1. Kurva Pembelajaran (Learning Curve)")
-            st.info("ℹ️ Grafik ini dibuat dinamis dari file `Riwayat_Training.csv`. Anda bisa zoom in/out.")
-            
-            path_history = 'model/Riwayat_Training.csv'
-            if not os.path.exists(path_history): path_history = 'Riwayat_Training.csv'
-
-            if os.path.exists(path_history):
-                df_hist = pd.read_csv(path_history)
-                
-                sub_tab1, sub_tab2 = st.tabs(["Akurasi", "Loss"])
-                
-                with sub_tab1:
-                    fig_acc = go.Figure()
-                    fig_acc.add_trace(go.Scatter(x=df_hist.index+1, y=df_hist['accuracy'], mode='lines+markers', name='Training Acc'))
-                    fig_acc.add_trace(go.Scatter(x=df_hist.index+1, y=df_hist['val_accuracy'], mode='lines+markers', name='Validation Acc'))
-                    fig_acc.update_layout(title="Pergerakan Akurasi per Epoch", xaxis_title="Epoch", yaxis_title="Akurasi", hovermode="x unified")
-                    st.plotly_chart(fig_acc, use_container_width=True)
-                
-                with sub_tab2:
-                    fig_loss = go.Figure()
-                    fig_loss.add_trace(go.Scatter(x=df_hist.index+1, y=df_hist['loss'], mode='lines+markers', name='Training Loss', line=dict(color='orange')))
-                    fig_loss.add_trace(go.Scatter(x=df_hist.index+1, y=df_hist['val_loss'], mode='lines+markers', name='Validation Loss', line=dict(color='red')))
-                    fig_loss.update_layout(title="Pergerakan Loss per Epoch", xaxis_title="Epoch", yaxis_title="Loss", hovermode="x unified")
-                    st.plotly_chart(fig_loss, use_container_width=True)
-            else:
-                st.warning("⚠️ File 'Riwayat_Training.csv' tidak ditemukan. Harap simpan history.history ke CSV saat di Colab.")
-
-            st.markdown("---") 
-
-            # 2. CONFUSION MATRIX (Heatmap)
-            st.subheader("2. Confusion Matrix")
-            
+            st.markdown("---")
+            st.subheader("2. Confusion Matrix (Model P5)")
             path_cm = 'model/Data_Confusion_Matrix.csv' 
-            if not os.path.exists(path_cm): path_cm = 'Data_Confusion_Matrix.csv'
+            if os.path.exists(path_cm):
+                df_cm_data = pd.read_csv(path_cm)
+                if 'y_true' in df_cm_data.columns and 'y_pred' in df_cm_data.columns:
+                    labels = ['Negatif', 'Netral', 'Positif'] 
+                    cm = confusion_matrix(df_cm_data['y_true'], df_cm_data['y_pred'])
+                    fig_cm = px.imshow(cm, text_auto=True, labels=dict(x="Prediksi Model", y="Label Aktual (Asli)", color="Jumlah Data"), x=labels, y=labels, color_continuous_scale='Blues')
+                    fig_cm.update_layout(title="Matrix Kebenaran Prediksi P5")
+                    st.plotly_chart(fig_cm, use_container_width=True)
+            else:
+                st.warning("⚠️ File 'Data_Confusion_Matrix.csv' tidak ditemukan.")
 
-            c_kiri, c_tengah, c_kanan = st.columns([1, 3, 1])
-            with c_tengah:
-                if os.path.exists(path_cm):
-                    df_cm_data = pd.read_csv(path_cm)
-                    
-                    if 'y_true' in df_cm_data.columns and 'y_pred' in df_cm_data.columns:
-                        labels = ['Negatif', 'Netral', 'Positif'] 
-                        cm = confusion_matrix(df_cm_data['y_true'], df_cm_data['y_pred'])
-                        
-                        fig_cm = px.imshow(cm, 
-                                           text_auto=True, 
-                                           labels=dict(x="Prediksi", y="Aktual", color="Jumlah"),
-                                           x=labels, y=labels,
-                                           color_continuous_scale='Blues')
-                        fig_cm.update_layout(title="Matrix Kebenaran Prediksi")
-                        st.plotly_chart(fig_cm, use_container_width=True)
-                    else:
-                        st.error("CSV Confusion Matrix harus punya kolom 'y_true' dan 'y_pred'.")
-                else:
-                    st.warning("⚠️ File 'Data_Confusion_Matrix.csv' tidak ditemukan.")
+        # --- TAB B: BAR CHART PERBANDINGAN SKENARIO (DINAMIS DARI CSV) ---
+        with tab_b:
+            st.subheader("Perbandingan Akurasi Skenario P1 hingga P5")
+            st.markdown("Grafik interaktif ini menunjukkan bahwa semakin besar porsi data latih yang diberikan, maka kemampuan model dalam mengklasifikasi sentimen cenderung semakin baik.")
+            
+            path_akurasi = 'model/Akurasi_Skenario.csv'
+            if os.path.exists(path_akurasi):
+                df_acc_skenario = pd.read_csv(path_akurasi)
+                rata_rata = df_acc_skenario['Akurasi'].mean()
+                
+                # Buat label gabungan P1 (20%), dst
+                df_acc_skenario['Label_X'] = df_acc_skenario['Skenario'] + " (" + df_acc_skenario['Porsi_Data'] + ")"
+                
+                fig_bar = px.bar(
+                    df_acc_skenario, x='Label_X', y='Akurasi', 
+                    text='Akurasi', 
+                    color='Skenario',
+                    color_discrete_sequence=px.colors.qualitative.Set1,
+                    title="Persentase Akurasi per Skenario Data Latih",
+                    labels={'Label_X': 'Skenario (Porsi Data Latih)', 'Akurasi': 'Akurasi (%)'}
+                )
+                
+                fig_bar.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+                fig_bar.add_hline(y=rata_rata, line_dash="dot", line_color="red", annotation_text=f"Rata-rata: {rata_rata:.2f}%")
+                fig_bar.update_layout(yaxis_range=[0, 100], showlegend=False)
+                
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.warning("⚠️ File 'Akurasi_Skenario.csv' belum tersedia. Harap export dari Colab.")
+
+        # --- TAB C: KURVA PEMBELAJARAN SEMUA SKENARIO (DINAMIS DARI CSV) ---
+        with tab_c:
+            st.subheader("Grafik Pergerakan Learning Curve")
+            st.info("Pilih skenario di bawah ini untuk melihat detail pergerakan Akurasi dan Loss-nya secara interaktif.")
+            
+            path_hist_semua = 'model/Riwayat_Training_Semua.csv'
+            if os.path.exists(path_hist_semua):
+                df_all_hist = pd.read_csv(path_hist_semua)
+                
+                # Opsi interaktif untuk memilih Skenario
+                skenario_pilihan = st.selectbox("Pilih Skenario:", ['P1', 'P2', 'P3', 'P4', 'P5'], index=4)
+                
+                # Filter data berdasarkan skenario yang dipilih
+                df_hist_filter = df_all_hist[df_all_hist['Skenario'] == skenario_pilihan]
+                
+                col_chart1, col_chart2 = st.columns(2)
+                
+                with col_chart1:
+                    fig_acc_line = go.Figure()
+                    fig_acc_line.add_trace(go.Scatter(x=df_hist_filter['Epoch'], y=df_hist_filter['accuracy'], mode='lines+markers', name='Train Acc'))
+                    fig_acc_line.add_trace(go.Scatter(x=df_hist_filter['Epoch'], y=df_hist_filter['val_accuracy'], mode='lines+markers', name='Val Acc'))
+                    fig_acc_line.update_layout(title=f"Akurasi ({skenario_pilihan})", xaxis_title="Epochs", yaxis_title="Akurasi", hovermode="x unified")
+                    st.plotly_chart(fig_acc_line, use_container_width=True)
+                
+                with col_chart2:
+                    fig_loss_line = go.Figure()
+                    fig_loss_line.add_trace(go.Scatter(x=df_hist_filter['Epoch'], y=df_hist_filter['loss'], mode='lines+markers', name='Train Loss', line=dict(color='orange')))
+                    fig_loss_line.add_trace(go.Scatter(x=df_hist_filter['Epoch'], y=df_hist_filter['val_loss'], mode='lines+markers', name='Val Loss', line=dict(color='red')))
+                    fig_loss_line.update_layout(title=f"Loss ({skenario_pilihan})", xaxis_title="Epochs", yaxis_title="Loss", hovermode="x unified")
+                    st.plotly_chart(fig_loss_line, use_container_width=True)
+            else:
+                st.warning("⚠️ File 'Riwayat_Training_Semua.csv' belum tersedia. Harap export dari Colab.")
 
     # ==============================================================================
     # 6. TOPIC MODELING (LDA) 
@@ -317,12 +336,12 @@ def render_proses_data():
     elif pilihan == "6. Topic Modeling (LDA)":
         st.header("6. Topic Modeling (LDA)")
         st.markdown("""
-        **Tujuan:** Menggali "Apa yang sebenarnya dibicarakan?" di balik sentimen tersebut menggunakan algoritma **Latent Dirichlet Allocation (LDA)**.
+        **Tujuan:** Menggali "Apa yang sebenarnya dibicarakan publik?" di balik masing-masing sentimen menggunakan metode **Latent Dirichlet Allocation (LDA)**.
         """)
 
         # --- BAGIAN A: METRIK EVALUASI (COHERENCE SCORE) ---
         st.subheader("A. Optimasi Jumlah Topik (Coherence Score)")
-        st.info("💡 Grafik ini menunjukkan bagaimana kita menentukan jumlah topik terbaik. Titik tertinggi adalah jumlah topik yang paling optimal.")
+        st.info("💡 Grafik ini menunjukkan bagaimana model menentukan jumlah topik (K) terbaik secara ilmiah berdasarkan skor *Coherence c_v* tertinggi.")
 
         col_lda1, col_lda2 = st.columns([2, 1])
         
@@ -335,8 +354,8 @@ def render_proses_data():
                 
                 # Plot Line Chart
                 fig_coh = px.line(df_coh, x='Num_Topics', y='Coherence_Score', markers=True,
-                                  title="Nilai Coherence Score vs Jumlah Topik",
-                                  labels={'Num_Topics': 'Jumlah Topik', 'Coherence_Score': 'Skor Koherensi'})
+                                  title="Pergerakan Nilai Coherence Score",
+                                  labels={'Num_Topics': 'Jumlah Topik', 'Coherence_Score': 'Skor Koherensi (c_v)'})
                 
                 max_score = df_coh['Coherence_Score'].max()
                 best_topic_num = df_coh.loc[df_coh['Coherence_Score'].idxmax(), 'Num_Topics']
@@ -352,16 +371,16 @@ def render_proses_data():
         with col_lda2:
             st.markdown("### 📝 Interpretasi:")
             st.write("""
-            Model mencari pola kata yang sering muncul bersamaan. 
+            Algoritma mesin bekerja dengan mencari pola kata yang sering muncul bersamaan di dalam satu dokumen teks. 
             
-            **Coherence Score** mengukur seberapa "nyambung" kata-kata dalam satu topik. Skor yang tinggi menunjukkan topik tersebut mudah dipahami oleh manusia.
+            **Coherence Score** bertugas untuk mengukur seberapa masuk akal ("nyambung") kumpulan kata-kata dalam satu topik. Semakin tinggi skornya, maka topik tersebut akan semakin mudah diinterpretasikan oleh pembaca/manusia.
             """)
 
         st.markdown("---")
 
         # --- BAGIAN B: VISUALISASI TOPIK (BAR CHART DARI CSV) ---
         st.subheader("B. Visualisasi Kata Kunci per Topik")
-        st.write("Berikut adalah kata-kata dominan yang membentuk setiap topik berdasarkan sentimen.")
+        st.write("Berikut adalah distribusi kata-kata kunci dominan yang mewakili setiap topik berdasarkan prediksi sentimen data *testing*.")
 
         path_lda = 'model/Hasil_Analisis_Topik_LDA.csv'
         if not os.path.exists(path_lda): path_lda = 'Hasil_Analisis_Topik_LDA.csv'
@@ -370,45 +389,58 @@ def render_proses_data():
             try:
                 df_lda = pd.read_csv(path_lda)
                 
-                # Fungsi Parsing: "0.035*kata" -> DataFrame
+                # Fungsi Parsing Teks dari format CSV
                 def parse_lda_string(text_data):
                     data_items = []
-                    for item in str(text_data).split(', '):
-                        try:
-                            weight, word = item.split('*')
-                            data_items.append({'Kata': word.strip(), 'Bobot': float(weight)})
-                        except: continue
-                    return pd.DataFrame(data_items).sort_values(by='Bobot', ascending=True)
+                    # Memisahkan format yang sudah kita bersihkan di Colab
+                    for word in str(text_data).split(','):
+                        word = word.strip()
+                        if word:
+                            # Bobot diset dinamis untuk memunculkan visual Bar Horizontal (berdasarkan urutan)
+                            data_items.append({'Kata': word})
+                    
+                    df_res = pd.DataFrame(data_items)
+                    if not df_res.empty:
+                        # Memberikan bobot buatan berdasarkan urutan (agar chart terbentuk rapi dari atas ke bawah)
+                        df_res['Bobot'] = range(len(df_res), 0, -1)
+                        df_res = df_res.sort_values(by='Bobot', ascending=True)
+                    return df_res
 
                 # Tabs untuk Topik
-                t_neg, t_net, t_pos = st.tabs(["Topik Negatif", "Topik Netral", "Topik Positif"])
+                t_neg, t_net, t_pos = st.tabs(["🔴 Topik Negatif", "⚪ Topik Netral", "🟢 Topik Positif"])
                 mapping = {'negatif': t_neg, 'netral': t_net, 'positif': t_pos}
 
                 for sentimen, tab in mapping.items():
                     with tab:
                         # Filter CSV berdasarkan sentimen
-                        df_subset = df_lda[df_lda['Sentimen'] == sentimen]
+                        df_subset = df_lda[df_lda['Sentimen'].str.lower() == sentimen]
                         
                         if df_subset.empty:
-                            st.warning(f"Belum ada data topik untuk {sentimen}.")
+                            st.warning(f"Belum ada data ekstraksi topik untuk sentimen {sentimen.upper()}.")
                         else:
-                            # Tampilkan Topik
+                            col_t1, col_t2 = st.columns(2)
+                            
+                            # Tampilkan Topik dengan 2 kolom berjajar
                             for idx, row in df_subset.iterrows():
                                 topik_ke = row['Topik Ke']
-                                df_chart = parse_lda_string(row['Kata Kunci (Bobot)'])
+                                df_chart = parse_lda_string(row['Kata Kunci'])
                                 
                                 if not df_chart.empty:
-                                    # Plot Bar Chart Horizontal
                                     fig = px.bar(
                                         df_chart, x='Bobot', y='Kata', orientation='h',
-                                        title=f"<b>Topik {topik_ke}:</b> Kata Kunci Dominan",
+                                        title=f"<b>Topik {topik_ke}</b>",
                                         color='Bobot',
-                                        color_continuous_scale='Blues' if sentimen == 'negatif' else 'Greys' if sentimen == 'netral' else 'Greens'
+                                        color_continuous_scale='Reds' if sentimen == 'negatif' else 'Greys' if sentimen == 'netral' else 'Greens'
                                     )
-                                    fig.update_layout(height=300, showlegend=False)
-                                    st.plotly_chart(fig, use_container_width=True)
-                                    st.divider()
+                                    # Sembunyikan X-axis karena ini hanya bobot representasi urutan
+                                    fig.update_layout(height=280, showlegend=False, xaxis_title=None, xaxis_visible=False)
+                                    
+                                    if idx % 2 == 0:
+                                        with col_t1: st.plotly_chart(fig, use_container_width=True)
+                                    else:
+                                        with col_t2: st.plotly_chart(fig, use_container_width=True)
+                                        
             except Exception as e:
-                st.error(f"Gagal memproses data LDA: {e}")
+                st.error(f"Gagal memproses visualisasi data LDA: {e}")
         else:
-            st.warning("⚠️ File 'Hasil_Analisis_Topik_LDA.csv' belum tersedia.")
+            st.warning("⚠️ File 'Hasil_Analisis_Topik_LDA.csv' belum tersedia di dalam folder model.")

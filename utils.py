@@ -17,7 +17,7 @@ except ImportError:
 # 1. KONFIGURASI GLOBAL
 # ==============================================================================
 MAX_SEQUENCE_LENGTH = 100
-MODEL_PATH = 'model/Model_Sentiment_BiLSTM.h5'
+MODEL_PATH = 'model/Model_Sentiment_LSTM.h5'
 TOKENIZER_JSON_PATH = 'model/tokenizer_sentiment.json'
 TOKENIZER_PICKLE_PATH = 'model/tokenizer_sentiment.pickle'
 
@@ -74,21 +74,15 @@ def load_resources():
         if os.path.exists(TOKENIZER_JSON_PATH):
             with open(TOKENIZER_JSON_PATH, 'r', encoding='utf-8') as f:
                 content = f.read()
-                
                 try:
                     parsed_json = json.loads(content)
-                    
                     if isinstance(parsed_json, str):
                         input_tokenizer = parsed_json
-                    
                     else:
                         input_tokenizer = json.dumps(parsed_json)
-                        
                 except:
                     input_tokenizer = content
-                
                 tokenizer = tf.keras.preprocessing.text.tokenizer_from_json(input_tokenizer)
-
         elif os.path.exists(TOKENIZER_PICKLE_PATH):
             with open(TOKENIZER_PICKLE_PATH, 'rb') as handle:
                 tokenizer = pickle.load(handle)
@@ -106,13 +100,18 @@ def load_resources():
 # 4. PREPROCESSING TEKS
 # ==============================================================================
 slang_dict = {
-    "yg": "yang", "dgn": "dengan", "gak": "tidak", "ga": "tidak", 
-    "tp": "tapi", "bgt": "banget", "udah": "sudah", "aja": "saja",
-    "jd": "jadi", "d": "di", "sprt": "seperti", "opr": "operasional",
-    "sdh": "sudah", "tlg": "tolong", "krn": "karena", "jgn": "jangan",
-    "tdk": "tidak", "kalo": "kalau", "klo": "kalau", "blm": "belum",
-    "bkn": "bukan", "tak": "tidak", "tau": "tahu", "aq": "aku", 
-    "km": "kamu", "bs": "bisa", "dlm": "dalam", "utk": "untuk"
+    'bgt': 'banget', 'yg': 'yang', 'gak': 'tidak', 'ga': 'tidak',
+    'kalo': 'kalau', 'kl': 'kalau', 'dr': 'dari', 'krn': 'karena',
+    'jd': 'jadi', 'sdh': 'sudah', 'aja': 'saja', 'dgn': 'dengan',
+    'tdk': 'tidak', 'tp': 'tapi', 'sy': 'saya', 'utk': 'untuk',
+    'd': 'di', 'blm': 'belum', 'jgn': 'jangan', 'gw': 'saya',
+    'lo': 'kamu', 'sm': 'sama', 'tau': 'tahu', 'kpn': 'kapan',
+    'bs': 'bisa', 'lbh': 'lebih', 'kmrn': 'kemarin',
+    'nggak': 'tidak', 'enggak': 'tidak', 'gk': 'tidak',
+    'kaga': 'tidak', 'tak': 'tidak', 'g': 'tidak',
+    'bener': 'benar', 'bnr': 'benar', 'msh': 'masih',
+    'udah': 'sudah', 'sprt': 'seperti', 'opr': 'operasional',
+    'tlg': 'tolong', 'bkn': 'bukan', 'aq': 'aku', 'km': 'kamu', 'dlm': 'dalam'
 }
 
 def clean_text(text):
@@ -122,7 +121,7 @@ def clean_text(text):
     text = re.sub(r'@\w+', '', text)
     text = re.sub(r'#\w+', '', text)
     text = re.sub(r'\d+', '', text)
-    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'[^\w\s]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     
     words = text.split()
@@ -141,7 +140,7 @@ def predict_sentiment(text, model, tokenizer):
     
     padded = pad_sequences(seq, maxlen=MAX_SEQUENCE_LENGTH, padding='post', truncating='post')
     
-    prediction = model.predict(padded)[0]
+    prediction = model.predict(padded, verbose=0)[0]
     
     labels = ['Negatif', 'Netral', 'Positif'] 
     label_idx = np.argmax(prediction)

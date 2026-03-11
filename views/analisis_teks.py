@@ -72,7 +72,7 @@ def render_analisis_teks(model, tokenizer):
 
     if btn_analisis:
         if input_text.strip():
-            with st.spinner('🤖 Model Bi-LSTM sedang memproses teks...'):
+            with st.spinner('🤖 Model LSTM sedang memproses teks...'):
                 label, confidence, probs, clean_txt = predict_sentiment(input_text, model, tokenizer)
                 
                 probabilitas_bersih = [float(p) for p in probs]
