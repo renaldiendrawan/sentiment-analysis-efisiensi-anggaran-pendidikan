@@ -243,9 +243,8 @@ def render_proses_data():
 
             if os.path.exists(path_perf):
                 df_perf = pd.read_csv(path_perf, index_col=0)
-                st.dataframe(
-                    df_perf.style.highlight_max(axis=0, props='background-color: #FFEB3B; color: black; font-weight: bold'),
-                    use_container_width=True
+                st.table(
+                    df_perf.style.highlight_max(axis=0, props='background-color: #FFEB3B; color: black; font-weight: bold')
                 )
                 if 'accuracy' in df_perf.index:
                     acc = df_perf.loc['accuracy', 'f1-score']

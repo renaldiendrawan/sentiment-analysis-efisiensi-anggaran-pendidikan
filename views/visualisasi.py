@@ -288,9 +288,8 @@ def render_visualisasi():
         if os.path.exists(path_perf):
             try:
                 df_perf = pd.read_csv(path_perf, index_col=0)
-                st.dataframe(
-                    df_perf.style.highlight_max(axis=0, props='background-color: #FFEB3B; color: black; font-weight: bold'),
-                    use_container_width=True
+                st.table(
+                    df_perf.style.highlight_max(axis=0, props='background-color: #FFEB3B; color: black; font-weight: bold')
                 )
             except Exception as e:
                 st.error(f"Gagal memuat tabel evaluasi: {e}")
